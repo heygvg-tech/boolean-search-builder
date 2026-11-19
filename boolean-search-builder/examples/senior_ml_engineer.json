@@ -1,8 +1,0 @@
-{
-  "titles": ["ml engineer"],
-  "must_have": ["python", "pytorch"],
-  "nice_to_have": ["llm", "kubernetes"],
-  "exclude": ["contract"],
-  "locations": ["New York", "Brooklyn"],
-  "companies": ["Runway", "Pika", "Luma AI"]
-}
