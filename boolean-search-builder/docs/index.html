@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Boolean Search Builder</title>
+<style>
+  :root { --accent:#2F6FEB; --ink:#1a1a1a; --muted:#666; --line:#e3e3e3; }
+  * { box-sizing:border-box; }
+  body { font-family:-apple-system,Segoe UI,Roboto,sans-serif; color:var(--ink); max-width:880px; margin:32px auto; padding:0 20px; }
+  h1 { font-size:26px; margin:0 0 4px; } .sub { color:var(--muted); margin-bottom:24px; }
+  label { display:block; font-weight:600; font-size:14px; margin:14px 0 6px; }
+  .hint { font-weight:400; color:var(--muted); font-size:12px; }
+  input { width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:8px; font-size:14px; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:0 16px; }
+  .row { display:flex; gap:18px; margin-top:14px; font-size:14px; }
+  .out { margin-top:28px; }
+  .card { border:1px solid var(--line); border-radius:10px; padding:14px; margin-bottom:14px; }
+  .card h3 { margin:0 0 8px; font-size:15px; display:flex; justify-content:space-between; align-items:center; }
+  pre { white-space:pre-wrap; word-break:break-word; margin:0; font-size:13px; background:#F6F8FB; padding:10px; border-radius:6px; }
+  button { background:var(--accent); color:#fff; border:0; border-radius:6px; padding:6px 12px; font-size:13px; cursor:pointer; }
+  .warn { background:#FFF4E5; border-radius:8px; padding:10px 12px; font-size:13px; margin-top:6px; }
+  @media (max-width:640px){ .grid{ grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<h1>Boolean Search Builder</h1>
+<div class="sub">Sourcing strings for LinkedIn Recruiter, Google X-ray and GitHub X-ray. Built by a technical recruiter.</div>
+
+<label>Titles <span class="hint">comma separated, e.g. ml engineer, data scientist</span></label>
+<input id="titles" value="ml engineer">
+<div class="grid">
+  <div><label>Must-have skills <span class="hint">all required</span></label><input id="must" value="python, pytorch"></div>
+  <div><label>Nice-to-have <span class="hint">any one</span></label><input id="nice" value="llm, kubernetes"></div>
+  <div><label>Locations <span class="hint">X-ray only</span></label><input id="loc" value="New York, Brooklyn"></div>
+  <div><label>Target companies</label><input id="companies" value="Runway, Pika, Luma AI"></div>
+</div>
+<label>Exclude</label><input id="exclude" value="contract">
+<div class="row">
+  <label style="margin:0;font-weight:400"><input type="checkbox" id="expand" checked style="width:auto"> Expand synonyms</label>
+  <label style="margin:0;font-weight:400"><input type="checkbox" id="defex" checked style="width:auto"> Exclude recruiters and students</label>
+</div>
+
+<div class="out" id="out"></div>
+
+<script>
+const TITLES = {
+  "software engineer":["software engineer","software developer","SWE","backend engineer","full stack engineer"],
+  "frontend engineer":["frontend engineer","front end engineer","front-end developer","UI engineer","React developer"],
+  "backend engineer":["backend engineer","back end engineer","server engineer","API engineer"],
+  "ml engineer":["machine learning engineer","ML engineer","applied scientist","AI engineer","deep learning engineer"],
+  "data scientist":["data scientist","applied scientist","research scientist","quantitative analyst"],
+  "data engineer":["data engineer","analytics engineer","ETL developer","big data engineer"],
+  "devops engineer":["devops engineer","site reliability engineer","SRE","platform engineer","infrastructure engineer"],
+  "security engineer":["security engineer","application security engineer","cloud security engineer","AppSec engineer"],
+  "engineering manager":["engineering manager","software engineering manager","head of engineering","director of engineering"],
+  "product manager":["product manager","senior product manager","technical product manager","group product manager"],
+  "product designer":["product designer","UX designer","UI/UX designer","interaction designer"],
+  "embedded engineer":["embedded engineer","firmware engineer","embedded software engineer","embedded systems engineer"],
+  "account executive":["account executive","AE","enterprise account executive","sales executive"],
+  "solutions engineer":["solutions engineer","sales engineer","solutions architect","pre-sales engineer"]
+};
+const SKILLS = {
+  python:["Python"], javascript:["JavaScript","TypeScript","Node.js"], typescript:["TypeScript"],
+  react:["React","React.js","ReactJS"], go:["Golang",'"Go developer"'], kubernetes:["Kubernetes","K8s"],
+  aws:["AWS","Amazon Web Services"], gcp:["GCP","Google Cloud"], pytorch:["PyTorch"], tensorflow:["TensorFlow"],
+  llm:["LLM","large language models","GPT","RAG"], terraform:["Terraform"], postgres:["Postgres","PostgreSQL"], spark:["Spark","PySpark"]
+};
+const DEFAULT_EXCLUDES = ["recruiter","sourcer","talent acquisition","intern","student"];
+
+const list = id => document.getElementById(id).value.split(",").map(s=>s.trim()).filter(Boolean);
+const quote = t => (t.startsWith('"')&&t.endsWith('"')) ? t : (/[ \-\/.]/.test(t) ? `"${t}"` : t);
+function orGroup(terms){
+  const seen=new Set(), out=[];
+  for(const t of terms){ const q=quote(t); if(!seen.has(q.toLowerCase())){ seen.add(q.toLowerCase()); out.push(q);} }
+  return out.length===0 ? "" : out.length===1 ? out[0] : "(" + out.join(" OR ") + ")";
+}
+function build(){
+  const expand=document.getElementById("expand").checked, defex=document.getElementById("defex").checked;
+  const xt = t => expand ? (TITLES[t.toLowerCase()]||[t]) : [t];
+  const xs = k => expand ? (SKILLS[k.toLowerCase()]||[k]) : [k];
+  const titles=list("titles").flatMap(xt), must=list("must"), nice=list("nice"), loc=list("loc"), cos=list("companies");
+  const ex=[...new Map([...list("exclude"), ...(defex?DEFAULT_EXCLUDES:[])].map(e=>[e.toLowerCase(),e])).values()];
+
+  let li=[orGroup(titles), ...must.map(k=>orGroup(xs(k)))];
+  if(nice.length) li.push(orGroup(nice.flatMap(xs)));
+  if(cos.length) li.push(orGroup(cos));
+  let liq=li.filter(Boolean).join(" AND "); if(ex.length) liq+=" NOT "+orGroup(ex);
+
+  const g=["site:linkedin.com/in", orGroup(titles.slice(0,4)), ...must.map(k=>quote(xs(k)[0]))];
+  if(loc.length) g.push(orGroup(loc)); if(cos.length) g.push(orGroup(cos.slice(0,3)));
+  ex.slice(0,3).forEach(e=>g.push("-"+quote(e)));
+  const gq=g.filter(Boolean).join(" ");
+
+  const gh=['site:github.com','"followers"','"repositories"', ...must.map(k=>quote(xs(k)[0]))];
+  if(loc.length) gh.push(orGroup(loc)); gh.push('-"jobs"','-"topics"');
+
+  const warn=[];
+  if(liq.length>1000) warn.push(`LinkedIn string is ${liq.length} characters. Consider trimming synonyms.`);
+  if(gq.replace(/[()]/g," ").split(/\s+/).filter(Boolean).length>32) warn.push("Google ignores terms past about 32 words.");
+  if(!must.length) warn.push("No must-have skills: results will be broad.");
+  if(must.length>4) warn.push("More than 4 must-haves usually shrinks the pool too far.");
+
+  const card=(name,q,link)=>`<div class="card"><h3>${name}<span>${link?`<a href="${link}" target="_blank" rel="noopener" style="font-size:13px;margin-right:10px">Open</a>`:""}<button onclick="navigator.clipboard.writeText(this.closest('.card').querySelector('pre').innerText)">Copy</button></span></h3><pre></pre></div>`;
+  const out=document.getElementById("out");
+  out.innerHTML = card("LinkedIn Recruiter",liq) + card("Google X-ray (LinkedIn)",gq,"https://www.google.com/search?q="+encodeURIComponent(gq))
+    + card("GitHub X-ray",gh.join(" "),"https://www.google.com/search?q="+encodeURIComponent(gh.join(" ")))
+    + warn.map(w=>`<div class="warn">${w}</div>`).join("");
+  const pres=out.querySelectorAll("pre"); [liq,gq,gh.join(" ")].forEach((q,i)=>pres[i].textContent=q);
+}
+document.querySelectorAll("input").forEach(i=>i.addEventListener("input",build));
+build();
+</script>
+</body>
+</html>
